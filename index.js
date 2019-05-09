@@ -5,6 +5,8 @@ const defaultPug = require('pug');
 const ext = require('replace-ext');
 const PluginError = require('plugin-error');
 const log = require('fancy-log');
+const bl = require('bl');
+const stream = require('readable-stream');
 
 module.exports = function gulpPug(options) {
   const opts = Object.assign({}, options);
@@ -19,13 +21,33 @@ module.exports = function gulpPug(options) {
     file.path = ext(file.path, opts.client ? '.js' : '.html');
 
     if (file.isStream()) {
-      return cb(new PluginError('gulp-pug', 'Streaming not supported'));
+      stream.pipeline([
+        file.contents,
+        bl(function(err, contents) {
+          if (err) {
+            return onError(err);
+          }
+
+          compile(String(contents));
+        }),
+      ], function(err) {
+        if (err) {
+          return onError(err);
+        }
+      });
+      return;
     }
 
     if (file.isBuffer()) {
+      const contents = String(file.contents);
+      compile(contents);
+      return;
+    }
+
+    function compile(contents) {
       try {
         let compiled;
-        const contents = String(file.contents);
+
         if (opts.verbose === true) {
           log('compiling file', file.path);
         }
@@ -36,9 +58,13 @@ module.exports = function gulpPug(options) {
         }
         file.contents = new Buffer(compiled);
       } catch (e) {
-        return cb(new PluginError('gulp-pug', e));
+        return onError(e);
       }
+      cb(null, file);
     }
-    cb(null, file);
+
+    function onError(err) {
+      cb(new PluginError('gulp-pug', err));
+    }
   });
 };

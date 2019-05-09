@@ -2,14 +2,16 @@
 
 const test = require('tap').test;
 
-const task = require('../');
+const plugin = require('../');
 
 const path = require('path');
 const fs = require('fs');
 const Vinyl = require('vinyl');
-const PluginError = require('plugin-error');
+const pug = require('pug');
+const miss = require('mississippi');
 
 const filePath = path.join(__dirname, 'fixtures', 'helloworld.pug');
+const fileContents = fs.readFileSync(filePath);
 const base = path.join(__dirname, 'fixtures');
 const cwd = __dirname;
 
@@ -21,11 +23,16 @@ const file = new Vinyl({
 });
 
 test('should error if contents is a stream', function(t) {
-  const stream = task();
-  stream.on('error', function(err) {
-    t.ok(err instanceof PluginError, 'not an instance of PluginError');
-    t.end();
-  });
-  stream.write(file);
-  stream.end();
+  function assert(files) {
+    /* eslint no-console: 0 */
+    var expected = pug.compile(fileContents)();
+    t.ok(files[0]);
+    t.equals(expected, String(files[0].contents));
+  }
+
+  miss.pipe([
+    miss.from.obj([file]),
+    plugin(),
+    miss.concat(assert),
+  ], t.end);
 });
